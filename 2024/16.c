@@ -14,6 +14,13 @@ typedef struct
     int x, y;
 } Vector;
 
+typedef struct
+{
+    Vector *data;
+    int size;
+    int capacity;
+} DynamicVectorArray;
+
 Vector directions[] = {
     {.x = 0, .y = -1}, // Up
     {.x = 1, .y = 0},  // Right
@@ -22,11 +29,16 @@ Vector directions[] = {
 };
 
 int ***memo;
+int currentBestScore = -1;
+DynamicVectorArray pointsVisitedInBestPath;
 
 FileStats countLines(FILE *file);
 void printGrid(char **grid, int lineCount);
 Vector findStart(char **grid, int lineCount);
 int findPathRecursive(char **grid, int lineCount, int x, int y, int direction, int score);
+void clearPointsVisitedInBestPath();
+void addPointToBestPath(Vector point);
+void addAllPathPointsToBestPath(char **grid, int lineCount);
 
 int main()
 {
@@ -50,11 +62,17 @@ int main()
         fgets(grid[i], fileStats.colCount + 1, file);
     }
 
+    pointsVisitedInBestPath.data = malloc(1000 * sizeof(Vector));
+    pointsVisitedInBestPath.size = 0;
+    pointsVisitedInBestPath.capacity = 1000;
+
     printGrid(grid, fileStats.lineCount);
     Vector start = findStart(grid, fileStats.lineCount);
     int bestScore = findPathRecursive(grid, fileStats.lineCount, start.x, start.y, 1, 0);
-    printf("Star 1 answer is: %d\n", bestScore); // Expect: 135512
+    printf("Star 1 answer is: %d\n", bestScore);                        // Expect: 135512
+    printf("Star 2 answer is: %d\n", pointsVisitedInBestPath.size + 1); // Expect: 541
 
+    free(pointsVisitedInBestPath.data);
     for (int i = 0; i < fileStats.lineCount; i++)
     {
         free(grid[i]);
@@ -63,6 +81,7 @@ int main()
             free(memo[i][j]);
         }
     }
+    free(memo);
     free(grid);
     fclose(file);
 }
@@ -113,21 +132,32 @@ int findPathRecursive(char **grid, int lineCount, int x, int y, int direction, i
 {
     if (grid[y][x] == 'E')
     {
+        if (currentBestScore == -1 || score < currentBestScore)
+        {
+            currentBestScore = score;
+            clearPointsVisitedInBestPath();
+            addAllPathPointsToBestPath(grid, lineCount);
+        }
+        else if (score == currentBestScore)
+        {
+            addAllPathPointsToBestPath(grid, lineCount);
+        }
+
         return score;
     }
 
-    if (grid[y][x] == '#')
+    if (grid[y][x] == '#' || grid[y][x] == 'O')
     {
         return -1;
     }
 
-    if (memo[y][x][direction] != -1 && memo[y][x][direction] <= score)
+    if (memo[y][x][direction] != -1 && memo[y][x][direction] < score)
     {
         return -1;
     }
 
     memo[y][x][direction] = score;
-    grid[y][x] = '#';
+    grid[y][x] = 'O';
 
     int bestScore = -1;
     for (int i = 0; i < 4; i++)
@@ -142,4 +172,43 @@ int findPathRecursive(char **grid, int lineCount, int x, int y, int direction, i
 
     grid[y][x] = '.';
     return bestScore;
+}
+
+void clearPointsVisitedInBestPath()
+{
+    pointsVisitedInBestPath.size = 0;
+}
+
+void addPointToBestPath(Vector point)
+{
+    for (int i = 0; i < pointsVisitedInBestPath.size; i++)
+    {
+        if (pointsVisitedInBestPath.data[i].x == point.x && pointsVisitedInBestPath.data[i].y == point.y)
+        {
+            return;
+        }
+    }
+
+    if (pointsVisitedInBestPath.size == pointsVisitedInBestPath.capacity)
+    {
+        pointsVisitedInBestPath.capacity = pointsVisitedInBestPath.capacity * 2;
+        pointsVisitedInBestPath.data = realloc(pointsVisitedInBestPath.data, pointsVisitedInBestPath.capacity * sizeof(Vector));
+    }
+
+    pointsVisitedInBestPath.data[pointsVisitedInBestPath.size] = point;
+    pointsVisitedInBestPath.size++;
+}
+
+void addAllPathPointsToBestPath(char **grid, int lineCount)
+{
+    for (int y = 0; y < lineCount; y++)
+    {
+        for (int x = 0; x < strlen(grid[y]); x++)
+        {
+            if (grid[y][x] == 'O')
+            {
+                addPointToBestPath((Vector){.x = x, .y = y});
+            }
+        }
+    }
 }
