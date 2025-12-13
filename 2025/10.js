@@ -39,3 +39,34 @@ bfs_lights = (c) => {
 
 lights_paths = cases.map((c) => bfs_lights(c));
 console.log(lights_paths.reduce((a, x) => a + x.length, 0));
+
+var glpk_lib = await import('https://jvail.github.io/glpk.js/dist/index.js')
+var glpk = await glpk_lib.default()
+
+var total_presses = 0
+for (var the_case of cases) {
+  var lp = {
+    name: 'LP',
+    objective: {
+      direction: glpk.GLP_MIN,
+      name: 'presses',
+      vars: the_case.btns.map((_, i) => ({ name: `x${i}`, coef: 1 }))
+    },
+    subjectTo: the_case.joltage.map((j, i) => ({
+      name: `c${i}`,
+      vars: the_case.btns
+        .map((btn, btn_i) => ({ btn_i, btn }))
+        .filter(({ btn, btn_i }) => btn.includes(i))
+        .map(({ btn_i }) => ({ name: `x${btn_i}`, coef: 1 })),
+      bnds: { type:glpk.GLP_FX, lb:j, ub:j }
+    })),
+    bounds: the_case.btns.map((_, i) => ({ name: `x${i}`, type: glpk.GLP_LO, lb: 0 })),
+    generals: the_case.btns.map((_, i) => `x${i}`)
+  }
+
+  var res = await glpk.solve(lp, { msglev: glpk.GLP_MSG_OFF })
+
+  total_presses += Object.values(res.result.vars).reduce((a, x) => a + x, 0)
+}
+
+console.log(total_presses)
